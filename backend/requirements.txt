@@ -1,0 +1,21 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+anthropic>=2.11
+# audio + on-device speech-to-text (Phase 2)
+faster-whisper>=1.2
+soundcard>=0.4.6
+numpy>=2
+# read answers aloud with built-in Windows voices (SAPI)
+comtypes>=1.4; sys_platform == "win32"
+# screenshots: screen capture + Windows built-in OCR (Phase 3)
+mss>=10
+winrt-runtime>=3; sys_platform == "win32"
+winrt-Windows.Media.Ocr; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging; sys_platform == "win32"
+winrt-Windows.Storage.Streams; sys_platform == "win32"
+winrt-Windows.Globalization; sys_platform == "win32"
+winrt-Windows.Foundation; sys_platform == "win32"
+winrt-Windows.Foundation.Collections; sys_platform == "win32"
+# dev
+pytest>=8
+httpx>=0.27

@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* The Tauri window is transparent and frameless; the panel draws its own rounded surface. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Plain browser (npm run dev without Tauri) gets a backdrop so the panel is visible. */
+body.browser {
+  background: #1f2937;
+}
