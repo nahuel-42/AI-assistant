@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TitleBar } from "./components/TitleBar";
 import { PrivateView } from "./features/assistant/PrivateView";
 import { VisibleView } from "./features/assistant/VisibleView";
+import { PhonePanel } from "./features/phone/PhonePanel";
 import { ProfileEditor } from "./features/settings/ProfileEditor";
 import { useBackendEvents } from "./hooks/useBackendEvents";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
@@ -17,11 +18,11 @@ export default function App() {
   const toggleMode = useAppStore((s) => s.toggleMode);
   const { toggleSession, togglePause, ask } = useSessionActions();
   const setMode = useAppStore((s) => s.setMode);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [panel, setPanel] = useState<"profile" | "phone" | null>(null);
 
-  const openProfile = () => {
-    setMode("visible"); // the editor needs the full-size window
-    setProfileOpen((open) => !open);
+  const togglePanel = (which: "profile" | "phone") => {
+    setMode("visible"); // panels need the full-size window
+    setPanel((open) => (open === which ? null : which));
   };
 
   useBackendEvents();
@@ -63,7 +64,7 @@ export default function App() {
 
   return (
     <main className="flex h-full flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 text-slate-100 shadow-2xl">
-      <TitleBar onScreenshot={() => void screenshot()} onAnswerNow={() => void answerNow()} onProfile={openProfile} />
+      <TitleBar onScreenshot={() => void screenshot()} onAnswerNow={() => void answerNow()} onProfile={() => togglePanel("profile")} onPhone={() => togglePanel("phone")} />
       {notice && (
         <button
           onClick={() => notify(null)}
@@ -73,8 +74,10 @@ export default function App() {
           {notice}
         </button>
       )}
-      {profileOpen ? (
-        <ProfileEditor onClose={() => setProfileOpen(false)} />
+      {panel === "profile" ? (
+        <ProfileEditor onClose={() => setPanel(null)} />
+      ) : panel === "phone" ? (
+        <PhonePanel onClose={() => setPanel(null)} />
       ) : mode === "visible" ? (
         <VisibleView onToggleSession={toggleSession} onTogglePause={togglePause} onAsk={ask} />
       ) : (

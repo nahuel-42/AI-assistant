@@ -34,6 +34,17 @@ the reasoning and trade-offs, then a real example from the profile, delivered co
 constructively. Interviewer questions get one spoken paragraph (read aloud) plus up to 2 extra
 points. Notes to you appear in parentheses and are not read aloud.
 
+**Phone view** (📱 in the title bar): turn it on and scan the QR code to see the live answers
+and transcript on your phone's browser, streamed word by word. Read-only. The phone must be on
+the same Wi-Fi (or use Tailscale). It runs as a separate server on port 8766 that only serves the
+phone page; the main API stays reachable from this PC only. If the Wi-Fi keeps devices apart
+(buildings, hotels, guest networks) or the phone is on mobile data, choose **Internet link**: a
+free Cloudflare quick tunnel (no account) gives a random https address. The 55 MB `cloudflared`
+program is downloaded once from Cloudflare's GitHub (pinned version, SHA-256 checked) into
+`%LOCALAPPDATA%\AIInterviewCopilot\bin`; in this mode the phone server listens on 127.0.0.1 only. The link carries a secret key;
+"New link" makes the old one stop working. The first time, allow Python through the Windows
+firewall on private networks. The on/off choice is remembered.
+
 **Use headphones during interviews.** Especially with read-aloud: through speakers, the
 interviewer would hear the spoken answer through your microphone. With speakers, your microphone also hears the interviewer
 and their words show up twice (once as "You").
@@ -112,6 +123,7 @@ Override them via the `copilot.shortcuts` localStorage key (a settings UI comes 
 | `COPILOT_AUTO_SUGGEST` | `true` | answer detected interviewer questions automatically |
 | `COPILOT_OCR_LANGUAGE` | (auto) | Windows OCR language, e.g. `en-US`; auto prefers Spanish, which also reads English |
 | `COPILOT_TTS_ENABLED` | `true` | `false` removes read-aloud entirely (the 🔊 toggle is for day-to-day use) |
+| `COPILOT_PHONE_PORT` | `8766` | phone view server (local network), only while it is on |
 | `COPILOT_PORT` | `8765` | if changed, set `VITE_BACKEND_URL` for the frontend |
 
 See [docs/architecture.md](docs/architecture.md) and [docs/api.md](docs/api.md).

@@ -14,6 +14,9 @@
 | POST | `/api/tts/stop` | stop speaking now |
 | POST | `/api/tts/speak` | `{text}`: read an answer aloud (replay) |
 | POST | `/api/screenshot` | capture + OCR the screen → `{chars, text, suggestion_id}`; text joins the context and is answered |
+| GET/PUT | `/api/phone` | phone view state; PUT `{enabled?, mode?: wifi|internet}`; while on also `url` and `qr_image` (data URI). `/ws` also sends `phone.state` `{enabled, clients, error}` |
+| POST | `/api/phone/install-tunnel` | one-time download of `cloudflared` (pinned, checksum verified) |
+| POST | `/api/phone/new-link` | new secret link; phones on the old one are disconnected |
 | POST | `/api/assistant/answer-now` | → 202 + suggestion; answers what was said since the last answer (cuts the sentence in progress first); 409 if nothing was heard |
 | POST | `/api/assistant/ask` | `{question}` → 202 + suggestion id; text streams over `/ws` |
 

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.services.phone.share import PhoneShare
 from app.core.config import Settings, load_settings
 from app.core.events import EventBus
 from app.models.db import Database
@@ -88,7 +89,12 @@ def create_app(
             speaker_factory=speaker_factory or build_speaker_factory(settings),
             screen_reader=screen_reader or build_screen_reader(settings),
         )
+        app.state.phone = PhoneShare(app.state.manager, settings.phone_port, settings.data_dir / "bin")
+        prefs = app.state.manager.preferences
+        if prefs and prefs.get("phone_enabled", "false") == "true":
+            await app.state.phone.start()  # it was on when the app last closed
         yield
+        await app.state.phone.stop()
         await app.state.manager.shutdown()
         db.close()
 

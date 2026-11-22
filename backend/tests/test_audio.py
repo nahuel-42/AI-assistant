@@ -122,9 +122,11 @@ def test_session_transcribes_both_sides_and_auto_suggests(client):
         ws.receive_json()  # initial session.state
         session = client.post("/api/sessions", json={}).json()
         events, deadline = [], time.time() + 10
+        # The two sides are transcribed in any order: wait for the answer and both lines.
         while time.time() < deadline:
             events.append(ws.receive_json())
-            if events[-1]["type"] == "assistant.done":
+            types = [e["type"] for e in events]
+            if "assistant.done" in types and types.count("transcript.segment") >= 2:
                 break
 
     segments = [e["payload"] for e in events if e["type"] == "transcript.segment"]

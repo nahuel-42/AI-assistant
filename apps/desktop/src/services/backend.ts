@@ -56,6 +56,24 @@ export interface PlanUsage {
   unifiedWindows?: Record<string, { utilization?: number; resetsAt?: number; status?: string }>;
 }
 
+export type PhoneMode = "wifi" | "internet";
+
+export interface PhoneState {
+  enabled: boolean;
+  mode: PhoneMode;
+  clients: number;
+  error: string | null;
+  starting: boolean;
+  cloudflared: boolean;
+  installing: boolean;
+  cloudflared_mb: number;
+}
+
+export interface PhoneInfo extends PhoneState {
+  url?: string;
+  qr_image?: string;
+}
+
 export interface Health {
   status: string;
   provider: string;
@@ -73,7 +91,8 @@ export type BackendEvent =
   | { type: "audio.status"; payload: AudioStatus }
   | { type: "assistant.usage"; payload: PlanUsage }
   | { type: "audio.mode"; payload: { mode: CaptureMode } }
-  | { type: "tts.state"; payload: TtsState };
+  | { type: "tts.state"; payload: TtsState }
+  | { type: "phone.state"; payload: PhoneState };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -109,6 +128,11 @@ export const api = {
     request<{ text: string }>("/api/profile", { method: "PUT", body: JSON.stringify({ text }) }),
   screenshot: () =>
     request<{ chars: number; text: string; suggestion_id: string | null }>("/api/screenshot", { method: "POST" }),
+  getPhone: () => request<PhoneInfo>("/api/phone"),
+  setPhone: (change: { enabled?: boolean; mode?: PhoneMode }) =>
+    request<PhoneInfo>("/api/phone", { method: "PUT", body: JSON.stringify(change) }),
+  installTunnel: () => request<PhoneInfo>("/api/phone/install-tunnel", { method: "POST" }),
+  newPhoneLink: () => request<PhoneInfo>("/api/phone/new-link", { method: "POST" }),
   answerNow: () => request<Suggestion>("/api/assistant/answer-now", { method: "POST" }),
   ask: (question: string) =>
     request<Suggestion>("/api/assistant/ask", { method: "POST", body: JSON.stringify({ question }) }),

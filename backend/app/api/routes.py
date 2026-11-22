@@ -180,6 +180,50 @@ async def answer_now(request: Request) -> Suggestion:
         raise _conflict(exc) from exc
 
 
+class PhoneToggle(BaseModel):
+    enabled: bool | None = None
+    mode: Literal["wifi", "internet"] | None = None
+
+
+def _phone_info(request: Request) -> dict:
+    phone = request.app.state.phone
+    info = phone.state()
+    if phone.enabled and phone.url:
+        info |= {"url": phone.url, "qr_image": phone.qr_image()}
+    return info
+
+
+@router.get("/api/phone")
+def phone_info(request: Request) -> dict:
+    """Phone view state; while on, also the link and its QR code."""
+    return _phone_info(request)
+
+
+@router.put("/api/phone")
+async def phone_toggle(body: PhoneToggle, request: Request) -> dict:
+    """Turn the phone view on/off and/or choose how the phone reaches it (wifi | internet)."""
+    phone = request.app.state.phone
+    if body.mode is not None:
+        await phone.set_mode(body.mode)
+    if body.enabled is not None:
+        await phone.set_enabled(body.enabled)
+    return _phone_info(request)
+
+
+@router.post("/api/phone/install-tunnel")
+async def phone_install_tunnel(request: Request) -> dict:
+    """One-time download of Cloudflare's tunnel program (pinned version, checksum verified)."""
+    await request.app.state.phone.install()
+    return _phone_info(request)
+
+
+@router.post("/api/phone/new-link")
+async def phone_new_link(request: Request) -> dict:
+    """Make a new link (and QR code); phones using the old one are disconnected."""
+    await request.app.state.phone.new_link()
+    return _phone_info(request)
+
+
 @router.websocket("/ws")
 async def events_socket(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -192,6 +236,7 @@ async def events_socket(websocket: WebSocket) -> None:
         )
         await websocket.send_json({"type": "audio.mode", "payload": {"mode": manager.capture_mode}})
         await websocket.send_json({"type": "tts.state", "payload": manager.tts_state()})
+        await websocket.send_json({"type": "phone.state", "payload": websocket.app.state.phone.state()})
         usage = getattr(manager.provider, "last_rate_limit", None)
         if usage:
             await websocket.send_json({"type": "assistant.usage", "payload": usage})

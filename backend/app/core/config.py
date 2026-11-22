@@ -20,6 +20,7 @@ def _bool(value: str) -> bool:
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8765
+    phone_port: int = 8766            # phone view (local network), only while turned on
     data_dir: Path = field(default_factory=_default_data_dir)
     # "auto" (default): API if ANTHROPIC_API_KEY is set, else the Claude subscription via Claude Code.
     # "claude" = API, "claude-code" = subscription via the Claude Code CLI, "echo" = offline stub.
@@ -58,6 +59,7 @@ def load_settings() -> Settings:
     return Settings(
         host=env.get("COPILOT_HOST", d.host),
         port=int(env.get("COPILOT_PORT", d.port)),
+        phone_port=int(env.get("COPILOT_PHONE_PORT", d.phone_port)),
         data_dir=Path(env["COPILOT_DATA_DIR"]) if "COPILOT_DATA_DIR" in env else d.data_dir,
         ai_provider=env.get("COPILOT_AI_PROVIDER", d.ai_provider),
         ai_model=env.get("COPILOT_AI_MODEL", d.ai_model),

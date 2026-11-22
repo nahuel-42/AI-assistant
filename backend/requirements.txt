@@ -16,6 +16,8 @@ winrt-Windows.Storage.Streams; sys_platform == "win32"
 winrt-Windows.Globalization; sys_platform == "win32"
 winrt-Windows.Foundation; sys_platform == "win32"
 winrt-Windows.Foundation.Collections; sys_platform == "win32"
+# phone view: QR code for the link
+segno>=1.6
 # dev
 pytest>=8
 httpx>=0.27

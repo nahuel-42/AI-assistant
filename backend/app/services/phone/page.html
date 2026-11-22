@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Interview Copilot</title>
+<style>
+  :root { color-scheme: dark; --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --dim:#94a3b8; --line:#334155; --accent:#38bdf8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); background: var(--bg); border-bottom: 1px solid var(--line); }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; flex: none; }
+  #dot.live { background: #22c55e; } #dot.off { background: #ef4444; }
+  #status { font-size: 13px; color: var(--dim); flex: 1; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button { font: inherit; font-size: 13px; color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+  .tabs button.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  main { padding: 12px 16px 40px; }
+  .empty { color: var(--dim); text-align: center; margin-top: 30vh; font-size: 15px; }
+  .answer { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .answer .q { font-size: 13px; color: var(--dim); margin-bottom: 6px; white-space: pre-wrap; }
+  .answer .a { white-space: pre-wrap; word-wrap: break-word; }
+  .answer:first-child .a { font-size: 19px; }
+  .answer:not(:first-child) { opacity: .65; }
+  .answer.streaming .a::after { content: "▍"; color: var(--accent); }
+  .answer.error .a { color: #fca5a5; }
+  pre { background: #020617; border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 14px; white-space: pre; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: .9em; }
+  .line { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .line b { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); display: block; }
+  .line.interviewer b { color: var(--accent); }
+  .line.q { color: #fde68a; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <span id="dot"></span><span id="status">Connecting…</span>
+  <nav class="tabs"><button id="tab-a" class="on">Answers</button><button id="tab-t">Transcript</button></nav>
+</header>
+<main>
+  <section id="answers"></section>
+  <section id="transcript" hidden></section>
+  <p id="empty" class="empty">Waiting for the interview to start…</p>
+</main>
+<script>
+"use strict";
+const token = new URLSearchParams(location.search).get("t") || "";
+history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token));
+const LABELS = { interviewer: "Interviewer", user: "You", unknown: "Mic", screen: "Screen" };
+const $ = (id) => document.getElementById(id);
+const answersEl = $("answers"), transcriptEl = $("transcript"), emptyEl = $("empty");
+let answers = [];          // newest first: {id, prompt, response, status}
+let lines = [];            // {speaker, text, is_question}
+let tab = "a", session = null, ws = null, retry = 500, expired = false, pending = false;
+
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function md(text) {
+  // Just enough markdown for answers: code blocks, inline code, bold.
+  return text.split(/```/).map((part, i) => {
+    if (i % 2) return "<pre><code>" + esc(part.replace(/^[\w+-]*\n/, "")) + "</code></pre>";
+    return esc(part).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+  }).join("");
+}
+
+function render() {
+  pending = false;
+  answersEl.innerHTML = answers.map((a) =>
+    `<article class="answer ${a.status}"><div class="q">${esc(a.prompt)}</div>` +
+    `<div class="a">${a.status === "error" && !a.response ? esc(a.error || "Error") : md(a.response)}</div></article>`).join("");
+  const atBottom = innerHeight + scrollY >= document.body.scrollHeight - 40;
+  transcriptEl.innerHTML = lines.map((l) =>
+    `<div class="line ${l.speaker}${l.is_question ? " q" : ""}"><b>${LABELS[l.speaker] || l.speaker}</b>${esc(l.text)}</div>`).join("");
+  answersEl.hidden = tab !== "a"; transcriptEl.hidden = tab !== "t";
+  const list = tab === "a" ? answers : lines;
+  emptyEl.hidden = list.length > 0;
+  emptyEl.textContent = session ? (tab === "a" ? "Answers will appear here." : "Listening…") : "Waiting for the interview to start…";
+  if (tab === "t" && atBottom) scrollTo(0, document.body.scrollHeight);
+}
+// Many deltas arrive per second: draw at most once per frame.
+const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(render); } };
+
+function setStatus(text, cls) { $("status").textContent = text; $("dot").className = cls || ""; }
+function sessionStatus() {
+  if (!session) return setStatus("No session running", "live");
+  setStatus(session.status === "paused" ? "Paused" : "Live", "live");
+}
+
+function onEvent({ type, payload: p }) {
+  switch (type) {
+    case "snapshot":
+      session = p.session;
+      lines = p.transcript;
+      answers = p.answers.reverse();
+      sessionStatus(); break;
+    case "session.state":
+      if (p.session && (!session || p.session.id !== session.id)) { answers = []; lines = []; }
+      session = p.session; sessionStatus(); break;
+    case "transcript.segment":
+      if (session && p.session_id !== session.id) return;
+      lines.push(p); if (lines.length > 200) lines.shift(); break;
+    case "assistant.started":
+      if (!answers.some((a) => a.id === p.id)) answers.unshift({ id: p.id, prompt: p.prompt, response: "", status: "streaming" });
+      if (answers.length > 30) answers.pop();
+      if (tab !== "a") { tab = "a"; tabs(); }
+      scrollTo(0, 0); break;
+    case "assistant.delta": { const a = answers.find((x) => x.id === p.id); if (a) a.response += p.delta; break; }
+    case "assistant.done": { const a = answers.find((x) => x.id === p.id); if (a) { a.response = p.response; a.status = "done"; } break; }
+    case "assistant.error": { const a = answers.find((x) => x.id === p.id); if (a) { a.status = "error"; a.error = p.message; } break; }
+  }
+  schedule();
+}
+
+function connect() {
+  if (expired || (ws && ws.readyState <= 1)) return;
+  setStatus("Connecting…");
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws?t=" + encodeURIComponent(token));
+  let ping;
+  ws.onopen = () => { retry = 500; ping = setInterval(() => ws.readyState === 1 && ws.send("ping"), 20000); };
+  ws.onmessage = (m) => onEvent(JSON.parse(m.data));
+  ws.onclose = (e) => {
+    clearInterval(ping);
+    if (e.code === 4403) { expired = true; return setStatus("Link expired: scan the QR code again", "off"); }
+    setStatus("Disconnected, retrying…", "off");
+    setTimeout(connect, retry); retry = Math.min(retry * 2, 5000);
+  };
+}
+// Keep the phone screen on while the page is open (browsers allow it over https only).
+async function keepAwake() { try { if (navigator.wakeLock && !document.hidden) await navigator.wakeLock.request("screen"); } catch (e) {} }
+// Phones freeze background tabs: reconnect the moment the page is visible again.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { retry = 500; connect(); keepAwake(); } });
+keepAwake();
+
+function tabs() { $("tab-a").className = tab === "a" ? "on" : ""; $("tab-t").className = tab === "t" ? "on" : ""; render(); }
+$("tab-a").onclick = () => { tab = "a"; tabs(); scrollTo(0, 0); };
+$("tab-t").onclick = () => { tab = "t"; tabs(); scrollTo(0, document.body.scrollHeight); };
+connect();
+</script>
+</body>
+</html>

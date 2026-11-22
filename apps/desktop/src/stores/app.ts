@@ -1,5 +1,14 @@
 import { create } from "zustand";
-import type { AudioStatus, BackendEvent, CaptureMode, PlanUsage, Session, TranscriptSegment, TtsState } from "../services/backend";
+import type {
+  AudioStatus,
+  BackendEvent,
+  CaptureMode,
+  PhoneState,
+  PlanUsage,
+  Session,
+  TranscriptSegment,
+  TtsState,
+} from "../services/backend";
 
 export type AppMode = "visible" | "private";
 
@@ -24,6 +33,7 @@ interface AppState {
   usage: PlanUsage | null;
   captureMode: CaptureMode;
   tts: TtsState | null;
+  phone: PhoneState | null;
   notice: string | null;
   setBackendOnline: (online: boolean) => void;
   setProvider: (provider: string | null) => void;
@@ -47,6 +57,7 @@ export const useAppStore = create<AppState>((set) => ({
   usage: null,
   captureMode: "both",
   tts: null,
+  phone: null,
   notice: null,
   setBackendOnline: (backendOnline) => set({ backendOnline }),
   setProvider: (provider) => set({ provider }),
@@ -75,6 +86,8 @@ export const useAppStore = create<AppState>((set) => ({
           return { captureMode: event.payload.mode };
         case "tts.state":
           return { tts: event.payload };
+        case "phone.state":
+          return { phone: event.payload };
         case "transcript.segment": {
           // Ignore late lines from an older session.
           if (s.session && event.payload.session_id !== s.session.id) return {};
