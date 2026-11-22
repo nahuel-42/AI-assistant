@@ -20,6 +20,36 @@ from app.services.audio.segmenter import SAMPLE_RATE
 # CoInitializeEx. Importing it lazily inside a capture thread fails with "Error 0x100000001".
 import soundcard as sc  # noqa: E402
 
+
+def _patch_soundcard_propvariant() -> None:
+    """Fix a heap overflow in soundcard (<= 0.4.6) on 64-bit Windows.
+
+    soundcard declares PROPVARIANT as 16 bytes, but the real x64 struct is 24, so every device-name
+    read lets Windows write 8 bytes past the buffer. After a few reads the heap is corrupt and the
+    backend dies (0xc0000374), which happens quickly on PCs with many audio devices (Voicemeeter,
+    VB-Cable). Allocate the real size, zeroed (PropVariantInit), and free it afterwards.
+    """
+    if sys.platform != "win32":
+        return
+    from soundcard import mediafoundation as mf
+
+    ffi, ole32 = mf._ffi, mf._ole32  # not the module itself: keeps its shutdown order intact
+    size = max(24, ffi.sizeof("PROPVARIANT"))
+
+    def __init__(self) -> None:
+        self.ptr = ffi.cast("PROPVARIANT *", ole32.CoTaskMemAlloc(size))
+        ffi.memmove(self.ptr, b"\0" * size, size)
+
+    def __del__(self) -> None:
+        ole32.PropVariantClear(self.ptr)
+        ole32.CoTaskMemFree(self.ptr)
+
+    mf._PropVariant.__init__ = __init__
+    mf._PropVariant.__del__ = __del__
+
+
+_patch_soundcard_propvariant()
+
 ChunkCallback = Callable[[np.ndarray], None]
 
 
